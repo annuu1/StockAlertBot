@@ -87,7 +87,7 @@ async def check_trades():
                 await trade_collection.update_one({"_id": trade["_id"]}, {"$set": {"entry_alert_sent": True}})
 
             # Reset alert after market close (3:30 PM IST)
-            elif alert_sent and not entry_alert_sent and now.hour >= 15 and now.minute >= 30:
+            elif alert_sent and not entry_alert_sent and (now.hour > 15 or (now.hour == 15 and now.minute >= 30)):
                 await trade_collection.update_one({"_id": trade["_id"]}, {"$set": {"alert_sent": False}})
                 print(f"🔁 Reset alert for {raw_symbol} at end of day")
 
