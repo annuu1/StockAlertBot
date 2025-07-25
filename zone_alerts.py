@@ -53,60 +53,80 @@ async def send_telegram_message(message: str):
 async def check_zones():
     print("\n📡 Checking Zones...")
 
-    async for zone in zone_collection.find({"freshness": {"$gt": 0}}):  # Only fresh zones
-        symbol = patch_symbol(zone["ticker"])
+    # Step 1: Fetch all fresh zones
+    zones = await zone_collection.find({"freshness": {"$gt": 0}}).to_list(None)
+    if not zones:
+        print("📭 No fresh zones found.")
+        return
+
+    # Step 2: Get unique symbols
+    tickers = list(set(patch_symbol(zone["ticker"]) for zone in zones))
+    print(f"📈 Unique symbols to fetch: {tickers}")
+
+    # Step 3: Fetch data once per symbol
+    price_data = {}
+    for symbol in tickers:
+        try:
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="1d")
+            if not hist.empty:
+                price_data[symbol] = hist["Low"].iloc[-1]
+                print(f"✅ Fetched data for {symbol}: Day Low ₹{price_data[symbol]:.2f}")
+            else:
+                print(f"⚠️ No data for {symbol}")
+        except Exception as e:
+            print(f"❌ Error fetching data for {symbol}: {e}")
+
+    now = datetime.now(IST)
+
+    # Step 4: Process zones using cached price data
+    for zone in zones:
+        symbol_raw = zone["ticker"]
+        symbol = patch_symbol(symbol_raw)
+        zone_id = zone["zone_id"]
         proximal = zone["proximal_line"]
         distal = zone["distal_line"]
-        zone_id = zone["zone_id"]
+        day_low = price_data.get(symbol)
 
-        # Add flags in DB if not already there
+        if day_low is None:
+            print(f"🚫 Skipping {symbol_raw} (no price data)")
+            continue
+
         zone_alert_sent = zone.get("zone_alert_sent", False)
         zone_entry_sent = zone.get("zone_entry_sent", False)
 
+        print(f"\n🧭 Zone Check: {symbol_raw} | Zone ID: {zone_id}")
+        print(f"➡️ Proximal ₹{proximal:.2f} | Distal ₹{distal:.2f} | Day Low ₹{day_low:.2f}")
+
         try:
-            print(f"\n🧭 Zone Check: {zone['ticker']} | TFs: {zone.get('timeframes')} | Zone ID: {zone_id}")
-            ticker = yf.Ticker(symbol)
-            data = ticker.history(period="1d")
-
-            if data.empty:
-                print(f"⚠️ No price data for {symbol}")
-                continue
-
-            day_low = data["Low"].iloc[-1]
-            now = datetime.now(IST)
-
-            print(f"ℹ️ {symbol} | Proximal: ₹{proximal:.2f} | Distal: ₹{distal:.2f} | Day Low: ₹{day_low:.2f}")
-
-            # Approaching proximal
-            if not zone_alert_sent and 0 < abs(proximal - day_low) / proximal <= 0.02:
-                msg = f"📶 *{zone['ticker']}* zone approaching entry\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
+            # Approaching alert
+            if not zone_alert_sent and 0 < abs(proximal - day_low) / proximal <= 0.03:
+                msg = f"📶 *{symbol_raw}* zone approaching entry\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
                 await send_telegram_message(msg)
                 await zone_collection.update_one(
-                    {"_id": zone["_id"]}, 
-                    {"$set": {"zone_alert_sent": True}}
+                    {"_id": zone["_id"]}, {"$set": {"zone_alert_sent": True}}
                 )
 
-            # Entry hit (at or below proximal)
+            # Entry alert
             if not zone_entry_sent and day_low <= proximal:
-                msg = f"🎯 *{zone['ticker']}* zone entry hit!\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
+                msg = f"🎯 *{symbol_raw}* zone entry hit!\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
                 await send_telegram_message(msg)
                 await zone_collection.update_one(
-                    {"_id": zone["_id"]}, 
-                    {"$set": {"zone_entry_sent": True}}
+                    {"_id": zone["_id"]}, {"$set": {"zone_entry_sent": True}}
                 )
 
-            # Breach distal → mark zone as no longer fresh
+            # Distal breach → freshness = 0, trade_score = 0
             if day_low < distal:
-                msg = f"🛑 *{zone['ticker']}* zone breached distal line!\nZone ID: `{zone_id}`\nDistal: ₹{distal:.2f}\nDay Low: ₹{day_low:.2f}"
+                msg = f"🛑 *{symbol_raw}* zone breached distal!\nZone ID: `{zone_id}`\nDistal: ₹{distal:.2f}\nDay Low: ₹{day_low:.2f}\n⚠️ Marking as no longer fresh"
                 await send_telegram_message(msg)
                 await zone_collection.update_one(
-                    {"_id": zone["_id"]}, 
-                    {"$set": {"freshness": 0}}
+                    {"_id": zone["_id"]},
+                    {"$set": {"freshness": 0, "trade_score": 0}}
                 )
-                print(f"❄️ Freshness reset to 0 for {zone['ticker']} zone")
+                print(f"❄️ Marked not fresh: {symbol_raw}")
 
         except Exception as e:
-            print(f"❌ Error checking zone {zone_id}: {e}")
+            print(f"❌ Error processing zone {zone_id}: {e}")
 
 async def main_loop():
     while True:
@@ -114,7 +134,7 @@ async def main_loop():
             await check_zones()
         except Exception as e:
             print(f"🔥 Error in main loop: {e}")
-        await asyncio.sleep(300)  # Run every 5 minutes
+        await asyncio.sleep(300)  # every 5 minutes
 
 if __name__ == "__main__":
     asyncio.run(main_loop())
