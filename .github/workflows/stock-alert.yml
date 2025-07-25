@@ -22,4 +22,4 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-        run: python stock-alert-bot/stock_alert.py
+        run: python stock-alert-bot/zone-trade-alert.py
