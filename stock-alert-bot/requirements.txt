@@ -1,3 +1,4 @@
 yfinance
 aiohttp
 motor
+dotenv
