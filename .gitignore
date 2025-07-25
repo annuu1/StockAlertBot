@@ -1,4 +1,4 @@
 *.csv
 use*
-*.txt
+*ed.txt
 .env
