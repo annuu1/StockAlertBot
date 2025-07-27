@@ -22,5 +22,5 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-        run: python stock-alert-bot/stock_alert.py
+        run: python stock_alert_job.py
         # run: python zone_alert.py
