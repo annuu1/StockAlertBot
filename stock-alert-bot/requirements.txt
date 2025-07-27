@@ -2,3 +2,4 @@ yfinance
 aiohttp
 motor
 python-dotenv
+pytz
