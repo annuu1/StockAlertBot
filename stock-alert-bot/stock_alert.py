@@ -6,6 +6,10 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 import aiohttp
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -14,6 +18,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 MONGO_URI = os.getenv("MONGODB_URI")
+
+# Define topic IDs for different alert types (replace with actual topic IDs)
+APPROACH_TOPIC_ID = "633"  # Replace with actual topic ID for approach alerts
+ENTRY_TOPIC_ID = "635"    # Replace with actual topic ID for entry alerts
+BREACH_TOPIC_ID = "637"   # Replace with actual topic ID for breach alerts
 
 logging.info("Environment Loaded: TELEGRAM_TOKEN=%s, TELEGRAM_CHAT_ID=%s, MONGO_URI=%s", 
              TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, MONGO_URI)
@@ -31,12 +40,13 @@ def patch_symbol(symbol: str) -> str:
         return symbol + '.NS'
     return symbol
 
-async def send_telegram_message(message: str):
+async def send_telegram_message(message: str, message_thread_id: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
+        "message_thread_id": message_thread_id
     }
 
     logging.info("Sending Telegram Message: URL=%s, Payload=%s", url, payload)
@@ -104,7 +114,7 @@ async def check_zones():
             # Approaching alert
             if not zone_alert_sent and 0 < abs(proximal - day_low) / proximal <= 0.03:
                 msg = f"📶 *{symbol_raw}* zone approaching entry\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
-                await send_telegram_message(msg)
+                await send_telegram_message(msg, APPROACH_TOPIC_ID)
                 await zone_collection.update_one(
                     {"_id": zone["_id"]}, {"$set": {"zone_alert_sent": True}}
                 )
@@ -112,7 +122,7 @@ async def check_zones():
             # Entry alert
             if not zone_entry_sent and day_low <= proximal:
                 msg = f"🎯 *{symbol_raw}* zone entry hit!\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
-                await send_telegram_message(msg)
+                await send_telegram_message(msg, ENTRY_TOPIC_ID)
                 await zone_collection.update_one(
                     {"_id": zone["_id"]}, {"$set": {"zone_entry_sent": True}}
                 )
@@ -120,7 +130,7 @@ async def check_zones():
             # Distal breach → freshness = 0, trade_score = 0
             if day_low < distal:
                 msg = f"🛑 *{symbol_raw}* zone breached distal!\nZone ID: `{zone_id}`\nDistal: ₹{distal:.2f}\nDay Low: ₹{day_low:.2f}\n⚠️ Marking as no longer fresh"
-                await send_telegram_message(msg)
+                await send_telegram_message(msg, BREACH_TOPIC_ID)
                 await zone_collection.update_one(
                     {"_id": zone["_id"]},
                     {"$set": {"freshness": 0, "trade_score": 0}}
@@ -132,10 +142,11 @@ async def check_zones():
 
 async def main():
     try:
+        await send_telegram_message("Test message", APPROACH_TOPIC_ID)
         await check_zones()
     except Exception as e:
         logging.error("Error in main: %s", e)
-        await send_telegram_message(f"Error in stock alert: {e}")
+        await send_telegram_message(f"Error in stock alert: {e}", 0)
 
 if __name__ == "__main__":
     asyncio.run(main())
