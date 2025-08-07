@@ -142,7 +142,7 @@ async def check_zones():
 
 async def main():
     try:
-        await send_telegram_message("Test message", APPROACH_TOPIC_ID)
+        # await send_telegram_message("Test message", APPROACH_TOPIC_ID)
         await check_zones()
     except Exception as e:
         logging.error("Error in main: %s", e)
