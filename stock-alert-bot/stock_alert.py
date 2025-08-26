@@ -111,12 +111,13 @@ async def check_zones():
         logging.info("Proximal ₹%.2f | Distal ₹%.2f | Day Low ₹%.2f", proximal, distal, day_low)
 
         try:
+            now_str = datetime.now(IST).isoformat()
             # Approaching alert
             if not zone_alert_sent and 0 < abs(proximal - day_low) / proximal <= 0.03:
                 msg = f"📶 *{symbol_raw}* zone approaching entry\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
                 await send_telegram_message(msg, APPROACH_TOPIC_ID)
                 await zone_collection.update_one(
-                    {"_id": zone["_id"]}, {"$set": {"zone_alert_sent": True}}
+                    {"_id": zone["_id"]}, {"$set": {"zone_alert_sent": True, "zone_alert_time": now_str}}
                 )
 
             # Entry alert
@@ -124,7 +125,7 @@ async def check_zones():
                 msg = f"🎯 *{symbol_raw}* zone entry hit!\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
                 await send_telegram_message(msg, ENTRY_TOPIC_ID)
                 await zone_collection.update_one(
-                    {"_id": zone["_id"]}, {"$set": {"zone_entry_sent": True}}
+                    {"_id": zone["_id"]}, {"$set": {"zone_entry_sent": True, "zone_entry_time": now_str}}
                 )
 
             # Distal breach → freshness = 0, trade_score = 0
@@ -133,7 +134,7 @@ async def check_zones():
                 await send_telegram_message(msg, BREACH_TOPIC_ID)
                 await zone_collection.update_one(
                     {"_id": zone["_id"]},
-                    {"$set": {"freshness": 0, "trade_score": 0}}
+                    {"$set": {"freshness": 0, "trade_score": 0, "zone_breach_time": now_str}}
                 )
                 logging.info("Marked not fresh: %s", symbol_raw)
 
