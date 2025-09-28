@@ -20,9 +20,9 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 MONGO_URI = os.getenv("MONGODB_URI")
 
 # Define topic IDs for different alert types (replace with actual topic IDs)
-APPROACH_TOPIC_ID = "633"  # Replace with actual topic ID for approach alerts
-ENTRY_TOPIC_ID = "635"    # Replace with actual topic ID for entry alerts
-BREACH_TOPIC_ID = "637"   # Replace with actual topic ID for breach alerts
+APPROACH_TOPIC_ID = "4"  # Replace with actual topic ID for approach alerts
+ENTRY_TOPIC_ID = "5"    # Replace with actual topic ID for entry alerts
+BREACH_TOPIC_ID = "6"   # Replace with actual topic ID for breach alerts
 
 logging.info("Environment Loaded: TELEGRAM_TOKEN=%s, TELEGRAM_CHAT_ID=%s, MONGO_URI=%s", 
              TELEGRAM_TOKEN, TELEGRAM_CHAT_ID, MONGO_URI)
