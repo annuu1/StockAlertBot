@@ -1,11 +1,36 @@
 name: Stock Alert
+
 on:
   schedule:
-    - cron: '15,25,35,45,55 3-9 * * 1-5' # 9:15 AM to 3:25 PM IST (UTC: 3:45 AM to 9:55 AM)
-    - cron: '0,10,20,30 10 * * 1-5' # 3:00 PM to 3:30 PM IST (UTC: 10:00 AM to 10:30 AM)
-  workflow_dispatch: {} # Allows manual triggering for testing
+    - cron: '15,25,35,45,55 3-9 * * 1-5'
+    - cron: '0,10,20,30 10 * * 1-5'
+  workflow_dispatch:
+
 jobs:
-  run-script:
+  # Attempt to run on your self-hosted runner
+  self_hosted:
+    runs-on: self-hosted
+    continue-on-error: true
+    outputs:
+      success: ${{ steps.run_self_hosted.outcome == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Run on Self Hosted
+        id: run_self_hosted
+        run: |
+          echo "Running on self-hosted runner..."
+          python -m pip install --upgrade pip
+          pip install -r stock-alert-bot/requirements.txt
+          python stock-alert-bot/stock_alert.py
+
+  # Fallback to GitHub-hosted runner if self-hosted fails
+  cloud_fallback:
+    needs: self_hosted
+    if: ${{ failure() || cancelled() || needs.self_hosted.result == 'failure' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,14 +38,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
-      - name: Install dependencies
+      - name: Run on Cloud
         run: |
+          echo "Running on GitHub-hosted runner..."
           python -m pip install --upgrade pip
           pip install -r stock-alert-bot/requirements.txt
-      - name: Run stock alert script
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-        run: python stock-alert-bot/stock_alert.py
-        # run: python zone_alert.py
+          python stock-alert-bot/stock_alert.py
