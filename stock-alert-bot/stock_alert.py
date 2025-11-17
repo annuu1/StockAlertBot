@@ -130,8 +130,8 @@ async def check_zones():
 
             # Distal breach → freshness = 0, trade_score = 0
             if day_low < distal:
-                msg = f"🛑 *{symbol_raw}* zone breached distal!\nZone ID: `{zone_id}`\nDistal: ₹{distal:.2f}\nDay Low: ₹{day_low:.2f}\n⚠️ Marking as no longer fresh"
-                await send_telegram_message(msg, BREACH_TOPIC_ID)
+                # msg = f"🛑 *{symbol_raw}* zone breached distal!\nZone ID: `{zone_id}`\nDistal: ₹{distal:.2f}\nDay Low: ₹{day_low:.2f}\n⚠️ Marking as no longer fresh"
+                # await send_telegram_message(msg, BREACH_TOPIC_ID)
                 await zone_collection.update_one(
                     {"_id": zone["_id"]},
                     {"$set": {"freshness": 0, "trade_score": 0, "zone_breach_time": now_str}}
