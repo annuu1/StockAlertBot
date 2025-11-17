@@ -96,6 +96,7 @@ async def check_zones():
         symbol_raw = zone["ticker"]
         symbol = patch_symbol(symbol_raw)
         zone_id = zone["zone_id"]
+        timeframe = zone['timeframes'][0].upper()
         proximal = zone["proximal_line"]
         distal = zone["distal_line"]
         day_low = price_data.get(symbol)
@@ -114,7 +115,7 @@ async def check_zones():
             now_str = datetime.now(IST).isoformat()
             # Approaching alert
             if not zone_alert_sent and 0 < abs(proximal - day_low) / proximal <= 0.03:
-                msg = f"📶 *{symbol_raw}* zone approaching entry\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
+                msg = f"📶 *{symbol_raw}* - *Approaching Zone*\n ----------- \nTF: `{timeframe}`\nProximal: ₹{proximal:.2f}\n"
                 await send_telegram_message(msg, APPROACH_TOPIC_ID)
                 await zone_collection.update_one(
                     {"_id": zone["_id"]}, {"$set": {"zone_alert_sent": True, "zone_alert_time": now_str}}
@@ -122,7 +123,7 @@ async def check_zones():
 
             # Entry alert
             if not zone_entry_sent and day_low <= proximal:
-                msg = f"🎯 *{symbol_raw}* zone entry hit!\nZone ID: `{zone_id}`\nProximal: ₹{proximal:.2f}\nDay Low: ₹{day_low:.2f}"
+                msg = f"🎯 *{symbol_raw}* Zone Entry!\n ----------- \nTF: `{timeframe}`\nProximal: ₹{proximal:.2f}\n"
                 await send_telegram_message(msg, ENTRY_TOPIC_ID)
                 await zone_collection.update_one(
                     {"_id": zone["_id"]}, {"$set": {"zone_entry_sent": True, "zone_entry_time": now_str}}
