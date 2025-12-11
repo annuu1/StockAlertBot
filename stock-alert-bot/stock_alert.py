@@ -31,6 +31,7 @@ logging.info("Environment Loaded: TELEGRAM_TOKEN=%s, TELEGRAM_CHAT_ID=%s, MONGO_
 client = AsyncIOMotorClient(MONGO_URI)
 db = client["stock_zones"]
 zone_collection = db["demand_zones"]
+config_collection = db["config"]
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -40,10 +41,10 @@ def patch_symbol(symbol: str) -> str:
         return symbol + '.NS'
     return symbol
 
-async def send_telegram_message(message: str, message_thread_id: str):
+async def send_telegram_message(message: str, message_thread_id: str, chat_id: str | None = None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
+        "chat_id": chat_id or TELEGRAM_CHAT_ID,
         "text": message,
         "parse_mode": "Markdown",
         "message_thread_id": message_thread_id
@@ -57,6 +58,33 @@ async def send_telegram_message(message: str, message_thread_id: str):
             logging.info("Response Status: %s, Response Text: %s", resp.status, text)
             if resp.status != 200:
                 raise Exception(f"Telegram API Error: {text}")
+
+async def get_additional_alert_groups():
+    try:
+        docs = await config_collection.find({"key": {"$regex": "^alertGroup"}}).to_list(None)
+        groups = {}
+        for d in docs:
+            k = d.get("key", "")
+            val = d.get("value")
+            if not k:
+                continue
+            parts = k.split("_", 1)
+            base = parts[0]
+            suffix = parts[1] if len(parts) > 1 else None
+            if base not in groups:
+                groups[base] = {"key": base}
+            if suffix is None:
+                groups[base]["chat_id"] = str(val) if val is not None else None
+            else:
+                groups[base][suffix] = str(val) if val is not None else None
+
+        # Convert to list and filter out items without chat_id
+        result = [g for g in groups.values() if g.get("chat_id")]
+        logging.info("Loaded additional alert groups: %s", result)
+        return result
+    except Exception as e:
+        logging.error("Failed to load additional alert groups: %s", e)
+        return []
 
 async def check_zones():
     # Check market hours
@@ -119,6 +147,9 @@ async def check_zones():
                 if freshness > 1.5:
                     msg = f"📶 *{symbol_raw}* - *Approaching Zone*\n ----------- \nTF: `{timeframe}`\nProximal: ₹{proximal:.2f}\n"
                     await send_telegram_message(msg, APPROACH_TOPIC_ID)
+                    for grp in await get_additional_alert_groups():
+                        thread_id = grp.get("approach") or APPROACH_TOPIC_ID
+                        await send_telegram_message(msg, thread_id, chat_id=grp.get("chat_id"))
                 await zone_collection.update_one(
                     {"_id": zone["_id"]}, {"$set": {"zone_alert_sent": True, "zone_alert_time": now_str}}
                 )
@@ -128,6 +159,9 @@ async def check_zones():
                 if freshness > 1.5:
                     msg = f"🎯 *{symbol_raw}* Zone Entry!\n ----------- \nTF: `{timeframe}`\nProximal: ₹{proximal:.2f}\n"
                     await send_telegram_message(msg, ENTRY_TOPIC_ID)
+                    for grp in await get_additional_alert_groups():
+                        thread_id = grp.get("entry") or ENTRY_TOPIC_ID
+                        await send_telegram_message(msg, thread_id, chat_id=grp.get("chat_id"))
                 await zone_collection.update_one(
                     {"_id": zone["_id"]}, {"$set": {"zone_entry_sent": True, "zone_entry_time": now_str}}
                 )
