@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import aiohttp
 import logging
 from dotenv import load_dotenv
+from typing import Optional
 
 # Load environment variables
 load_dotenv()
@@ -41,7 +42,7 @@ def patch_symbol(symbol: str) -> str:
         return symbol + '.NS'
     return symbol
 
-async def send_telegram_message(message: str, message_thread_id: str, chat_id: str | None = None):
+async def send_telegram_message(message: str, message_thread_id: str, chat_id: Optional[str] = None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id or TELEGRAM_CHAT_ID,
